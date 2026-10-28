@@ -61,10 +61,7 @@ Beneath the daytime city runs a night city that rarely appears in its official p
 
 | File | What it is |
 |---|---|
-| `index.html` | explore mode. 
+| `index.html` | The whole site: onboarding, game and explore mode. Data is built in; D3 loads from a CDN. |
 | `data_prep.py` | Rebuilds the data from NYC Open Data and prints a profile. |
+| `README.md` | This page. |
 
-
-## AI use
-
-Built with help from Claude (Anthropic), as allowed by the course AI policy. Claude ran the data queries and counts, designed the game and onboarding, wrote the HTML/CSS/D3 code and `data_prep.py`, and drafted this README. The project idea, theme interpretation and final decisions are mine.
