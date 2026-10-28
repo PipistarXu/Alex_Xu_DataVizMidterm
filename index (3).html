@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Guess the Hour: a game about what New Yorkers report to 311 at each hour of the day, built on NYC Open Data.">
+<title>Guess the Hour</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Nunito+Sans:wght@400;700&display=swap">
+<style>
+  /* Warm night look: a sunset-to-night sky, a lit skyline, cream ink and lamp amber.
+     Each round type has its own color: Hour = amber, Wave = coral, Card = mint. */
+  :root {
+    color-scheme: dark;
+    --night: #1a1018;
+    --surface: #261a26;
+    --well: #3a2840;
+    --line: #4d3754;
+    --ink: #fff3e4;
+    --ink-2: #ead3c2;
+    --ink-3: #b9a097;
+    --lamp: #ffc35c;
+    --lamp-2: #d98a3a;
+    --lamp-3: #6e4535;
+    --coral: #ff7a59;
+    --mint: #5fd4b0;
+    --rose: #ff5c8a;
+    --paper: #fff4e0;
+    --paper-ink: #2a1a1f;
+    --good: #5fd4b0;
+    --s-noise: #3987e5;
+    --s-heat: #d95926;
+    --s-parking: #199e70;
+    --s-housing: #c98500;
+    --s-trash: #d55181;
+    --s-streets: #2f9a2f;
+    --s-homeless: #9085e9;
+    --s-water: #e66767;
+    --s-other: #8d7f7a;
+    --display: "Bricolage Grotesque", "Overpass", "Arial Narrow", Arial, sans-serif;
+    --body: "Nunito Sans", "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  /* The sky behind the header follows the selected hour; registered so the gradient can animate. */
+  @property --sky-top { syntax: "<color>"; inherits: true; initial-value: #100c22; }
+  @property --sky-mid { syntax: "<color>"; inherits: true; initial-value: #28143a; }
+  @property --sky-glow { syntax: "<color>"; inherits: true; initial-value: #4f2350; }
+  body { margin: 0; color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; background-color: var(--night); position: relative; }
+  #sky { position: absolute; left: 0; right: 0; top: 0; height: 780px; z-index: -1; pointer-events: none; overflow: hidden;
+    background:
+      radial-gradient(ellipse 85% 42% at 50% 36%, color-mix(in srgb, var(--sky-glow) 60%, transparent), transparent 72%),
+      linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 36%, var(--night) 100%);
+    transition: --sky-top 1s ease, --sky-mid 1s ease, --sky-glow 1s ease; }
+  #stars { position: absolute; inset: 0 0 50% 0; transition: opacity 1s ease; }
+  #stars i { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff6e0; }
+  #skyline rect.win { transition: opacity 0.7s ease; }
+  header { text-shadow: 0 1px 14px rgba(10, 6, 20, 0.45); }
+  h1 { text-shadow: none; filter: drop-shadow(0 2px 10px rgba(10, 6, 20, 0.35)); }
+  .skytime { font-family: var(--display); font-weight: 600; font-size: 13px; color: var(--ink-2); letter-spacing: 0.08em; text-transform: uppercase; margin-left: auto; align-self: center; }
+  .page { max-width: 1140px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: flex; flex-direction: column; gap: 22px; }
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .kicker { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.04em; color: var(--lamp); display: flex; align-items: center; gap: 8px; }
+  .kicker::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 10px var(--coral); animation: blink 2.4s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(44px, 8vw, 80px); line-height: 0.95; margin: 0; letter-spacing: -0.02em;
+    background: linear-gradient(95deg, #ffd37a 0%, #ff9a5a 45%, #ff5c8a 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { max-width: 64ch; margin: 0; font-size: 18px; color: var(--ink-2); }
+  .lede b { color: var(--ink); font-weight: 700; background: linear-gradient(transparent 62%, rgba(255, 195, 92, 0.35) 62%); }
+  #skyline { display: block; width: 100%; height: 84px; margin-top: 6px; }
+  .tw { animation: twinkle 3.2s ease-in-out infinite alternate; }
+  @keyframes twinkle { to { opacity: 0.15; } }
+
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: -6px; }
+  .tab, .seg button, .btn, .opt { font-family: var(--display); font-weight: 600; cursor: pointer; }
+  .tab { font-size: 15px; padding: 9px 20px; border-radius: 999px; background: rgba(255, 255, 255, 0.04); color: var(--ink-2); border: 1px solid var(--line); }
+  .tab[aria-selected="true"] { background: var(--lamp); color: var(--paper-ink); border-color: var(--lamp); }
+  .tab:hover:not([aria-selected="true"]) { color: var(--ink); border-color: var(--ink-3); }
+  :focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 28px; align-items: start;
+    background: linear-gradient(180deg, #2d1f2e 0%, #231723 100%); border: 1px solid var(--line); border-radius: 26px; padding: 26px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05); }
+  @media (max-width: 860px) { .stage { grid-template-columns: minmax(0, 1fr); padding: 16px; border-radius: 20px; } }
+  .visual { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .vis { position: relative; width: 100%; max-width: 540px; margin: 0 auto; }
+  #vis-dial { background: radial-gradient(circle at 50% 50%, rgba(255, 195, 92, 0.13), transparent 62%); }
+  #vis-wave { background: radial-gradient(ellipse 60% 70% at 50% 85%, rgba(255, 122, 89, 0.16), transparent 70%); }
+  svg.big { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+  svg text { font-family: var(--display); }
+  .tick-label { fill: var(--ink-3); font-size: 16px; font-weight: 600; }
+  .center-time { fill: var(--ink); font-size: 54px; font-weight: 800; }
+  .center-sub { fill: var(--ink-2); font-size: 16px; font-weight: 600; }
+  .center-sub2 { fill: var(--ink-3); font-size: 14px; font-weight: 600; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .step { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--well); color: var(--ink); font-size: 15px; cursor: pointer; line-height: 1; }
+  .step:hover { border-color: var(--lamp); color: var(--lamp); }
+  input[type="range"] { flex: 1 1 180px; max-width: 320px; accent-color: var(--lamp); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--ink-2); padding: 6px 14px; font-size: 14px; border-radius: 999px; }
+  .seg button[aria-pressed="true"] { background: var(--well); color: var(--lamp); }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; align-items: center; min-height: 48px; }
+  .hover-wedge { pointer-events: none; transition: opacity 0.12s ease; }
+  svg.big:focus { outline: none; }
+  svg.big:focus-visible { outline: 2px dashed var(--lamp); outline-offset: 2px; border-radius: 24px; }
+  .caption { margin: 0; text-align: center; color: var(--ink-3); font-size: 14px; max-width: 46ch; align-self: center; }
+
+  /* round-type colors */
+  .k-hour { --k: var(--lamp); }
+  .k-wave { --k: var(--coral); }
+  .k-card { --k: var(--mint); }
+
+  /* flashcard */
+  .cardwrap { perspective: 1400px; width: 100%; max-width: 480px; margin: 22px auto 0; transform: rotate(-1.5deg); }
+  .card { display: grid; min-height: 340px; transform-style: preserve-3d; transition: transform 0.7s cubic-bezier(0.3, 1.4, 0.5, 1); }
+  .cardwrap.flipped .card { transform: rotateY(180deg); }
+  .face { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 20px; padding: 30px 28px 26px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+  .front { background: var(--paper); color: var(--paper-ink); box-shadow: 0 22px 50px rgba(0, 0, 0, 0.45);
+    background-image: repeating-linear-gradient(transparent 0 33px, rgba(255, 122, 89, 0.16) 33px 34px); background-position: 0 70px; }
+  .front::before { content: ""; position: absolute; top: -12px; left: 50%; width: 96px; height: 26px; transform: translateX(-50%) rotate(2deg); background: rgba(255, 195, 92, 0.75); border-radius: 3px; }
+  .back { background: linear-gradient(160deg, #43304a, #2c1f30); color: var(--ink); border: 1px solid var(--line); transform: rotateY(180deg); box-shadow: 0 22px 50px rgba(0, 0, 0, 0.45); }
+  .face .tag { font-family: var(--display); font-weight: 600; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; }
+  .front .tag { color: #c2502f; }
+  .back .tag { color: var(--mint); }
+  .front .q { font-family: var(--display); font-weight: 800; font-size: clamp(24px, 3.6vw, 34px); line-height: 1.1; margin: 0; }
+  .front .vs { margin-top: auto; display: flex; gap: 10px; flex-wrap: wrap; font-family: var(--display); font-weight: 600; font-size: 17px; }
+  .front .vs span { border: 2px solid var(--paper-ink); border-radius: 999px; padding: 6px 14px; background: var(--paper); }
+  .front .vs span + span::before { content: "or "; font-weight: 400; color: #8a6f66; }
+  .back .ans { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1.08; margin: 0; }
+  .back .fact { margin: 0; color: var(--ink-2); font-size: 16px; }
+  .cmp { margin-top: auto; display: flex; flex-direction: column; gap: 10px; }
+
+  /* panel */
+  .panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; position: relative; }
+  .panel h2 { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1.06; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .panel p { margin: 0; color: var(--ink-2); }
+  .panel p b { color: var(--ink); font-weight: 700; }
+  .meta { font-size: 14px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .pips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pip { font-family: var(--display); font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 11px; border-radius: 999px; border: 1px dashed var(--line); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .pip.now { border: 1.5px solid var(--k); color: var(--k); box-shadow: 0 0 14px color-mix(in srgb, var(--k) 35%, transparent); }
+  .pip.done { background: color-mix(in srgb, var(--k) 22%, transparent); color: var(--ink); border: 1px solid transparent; }
+  .scoreline { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .scoreline .kind { font-family: var(--display); font-weight: 600; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--k); }
+  .scoreline .pts { font-family: var(--display); font-weight: 600; font-size: 14px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; }
+  .scoreline .pts b { color: var(--lamp); font-weight: 800; font-size: 18px; font-variant-numeric: tabular-nums; }
+
+  .rows { display: flex; flex-direction: column; gap: 9px; list-style: none; margin: 0; padding: 0; }
+  .row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; column-gap: 9px; row-gap: 4px; align-items: center; }
+  .sw { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .row .name { font-size: 14px; color: var(--ink-2); overflow-wrap: anywhere; }
+  .row .val { font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .track { grid-column: 1 / -1; position: relative; height: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 0 5px 5px 0; }
+  .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 5px 5px 0; transition: width 0.3s ease; }
+  .avg { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: 0.75; }
+  .key { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); }
+  .key i { display: inline-block; width: 2px; height: 14px; background: var(--ink); opacity: 0.75; }
+
+  .btn { font-size: 16px; padding: 12px 22px; border-radius: 999px; border: 0; background: var(--lamp); color: var(--paper-ink); box-shadow: 0 4px 0 var(--lamp-2); transition: transform 0.08s, box-shadow 0.08s; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 0 var(--lamp-2); }
+  .btn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--lamp-2); }
+  .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--line); box-shadow: none; }
+  .btn.ghost:hover:not(:disabled) { border-color: var(--ink-3); box-shadow: none; }
+  .btn:disabled { opacity: 0.45; cursor: default; box-shadow: none; }
+  .btnrow { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .readout { font-family: var(--display); font-weight: 800; font-size: 60px; line-height: 1; color: var(--coral); font-variant-numeric: tabular-nums; }
+  .readout small { display: inline-block; font-size: 14px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.1em; text-transform: uppercase; margin-left: 10px; vertical-align: middle; }
+  .wave-slider { width: 100%; max-width: none; accent-color: var(--coral); }
+  .opts { display: flex; flex-direction: column; gap: 10px; }
+  .opt { text-align: left; font-size: 18px; padding: 15px 18px; border-radius: 16px; border: 1.5px solid var(--line); background: var(--well); color: var(--ink); display: flex; justify-content: space-between; gap: 12px; align-items: center; transition: transform 0.1s, border-color 0.1s; }
+  .opt:hover:not(:disabled) { border-color: var(--mint); transform: translateX(4px); }
+  .opt:disabled { cursor: default; }
+  .opt.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 16%, var(--well)); }
+  .opt.wrong { border-color: var(--coral); background: color-mix(in srgb, var(--coral) 12%, var(--well)); }
+  .opt .badge { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+  .result { position: relative; border-top: 1px dashed var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .big { font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1.05; color: var(--ink); animation: pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); transform-origin: left center; }
+  @keyframes pop { from { transform: scale(0.6); opacity: 0; } }
+  .plus { color: var(--lamp); }
+  .confetti { position: absolute; left: 0; right: 0; top: 0; height: 0; pointer-events: none; }
+  .confetti i { position: absolute; top: 0; width: 8px; height: 12px; border-radius: 2px; opacity: 0; animation: conf 1.3s ease-out forwards; }
+  @keyframes conf { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--r)); } }
+
+  .modes { display: flex; flex-direction: column; gap: 10px; list-style: none; margin: 0; padding: 0; }
+  .modes li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 14px; align-items: center; background: var(--well); border-radius: 16px; padding: 14px 16px; border-left: 4px solid var(--k); }
+  .modes .mk { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--k) 20%, transparent); color: var(--k); }
+  .modes .mk svg { width: 28px; height: 28px; }
+  .modes b { font-family: var(--display); font-weight: 700; color: var(--ink); font-size: 18px; }
+  .modes p { font-size: 14px; }
+  .modes .worth { color: var(--k); font-weight: 700; }
+  .breakdown { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .breakdown div { background: var(--well); border-radius: 14px; padding: 12px 14px; border-top: 3px solid var(--k); }
+  .breakdown .n { font-family: var(--display); font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; color: var(--k); border: 0; padding: 0; }
+  .breakdown .l { font-size: 13px; color: var(--ink-3); border: 0; padding: 0; }
+  .finalscore { font-family: var(--display); font-weight: 800; font-size: 84px; line-height: 0.9; letter-spacing: -0.03em;
+    background: linear-gradient(95deg, #ffd37a, #ff7a59 60%, #ff5c8a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .finalscore small { font-size: 26px; color: var(--ink-3); -webkit-text-fill-color: var(--ink-3); letter-spacing: 0; }
+  .learned { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; color: var(--ink-2); font-size: 15px; }
+  .learned li::marker { color: var(--lamp); }
+
+  #tip { position: absolute; pointer-events: none; z-index: 5; background: var(--night); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; font-size: 13px; color: var(--ink-2); line-height: 1.35; max-width: 220px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); }
+  #tip b { color: var(--ink); font-weight: 700; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px 36px; }
+  .notes section { min-width: 0; }
+  .notes h3 { font-family: var(--display); font-weight: 700; font-size: 19px; margin: 0 0 6px; color: var(--lamp); }
+  .notes p, .notes li { color: var(--ink-2); font-size: 15px; margin: 0; }
+  .notes ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  code { font-size: 0.9em; color: var(--ink); }
+  a { color: var(--ink); text-decoration-color: var(--coral); text-underline-offset: 3px; }
+  details { border-top: 1px solid var(--line); padding-top: 14px; }
+  summary { cursor: pointer; font-family: var(--display); font-weight: 600; color: var(--ink-2); }
+  .tablewrap { overflow-x: auto; margin-top: 12px; }
+  table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 760px; }
+  th, td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+  th { color: var(--ink-3); font-weight: 600; vertical-align: bottom; }
+  th:first-child, td:first-child { text-align: left; color: var(--ink); }
+  /* ---------- onboarding: a short click-through intro before the game ---------- */
+  .onboard { background: linear-gradient(180deg, #2d1f2e 0%, #231723 100%); border: 1px solid var(--line); border-radius: 26px; padding: 26px 28px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05); display: flex; flex-direction: column; gap: 20px; }
+  .ob-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .ob-count { font-family: var(--display); font-weight: 600; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .linkbtn { background: none; border: 0; color: var(--ink-2); font-family: var(--display); font-weight: 600; font-size: 14px; cursor: pointer; text-decoration: underline; text-decoration-color: var(--coral); text-underline-offset: 3px; padding: 6px 2px; }
+  .linkbtn:hover { color: var(--ink); }
+  .ob-body { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 32px; align-items: center; min-height: 340px; }
+  @media (max-width: 860px) { .onboard { padding: 18px 16px; border-radius: 20px; } .ob-body { grid-template-columns: minmax(0, 1fr); gap: 18px; min-height: 0; } }
+  .ob-text { display: flex; flex-direction: column; gap: 12px; }
+  .ob-kick { font-family: var(--display); font-weight: 600; font-size: 14px; color: var(--lamp); }
+  .ob-text h2 { font-family: var(--display); font-weight: 800; font-size: clamp(28px, 3.6vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .ob-text p { margin: 0; color: var(--ink-2); font-size: 17px; max-width: 52ch; }
+  .ob-text p b { color: var(--ink); }
+  .ob-vis { min-width: 0; }
+  .ob-vis svg { display: block; width: 100%; height: auto; }
+  .ob-vis .lab { fill: var(--ink-2); font-size: 15px; font-weight: 600; }
+  .ob-vis .lab-3 { fill: var(--ink-3); font-size: 13px; font-weight: 600; }
+  .ob-vis .bignum { fill: var(--lamp); font-size: 64px; font-weight: 800; }
+  .ob-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; font-size: 14px; color: var(--ink-2); }
+  .ob-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .ob-legend b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .gaps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .gaps li { background: var(--well); border-radius: 16px; padding: 14px 16px; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; }
+  .gaps .gi { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 122, 89, 0.18); color: var(--coral); }
+  .gaps .gi svg { width: 22px; height: 22px; }
+  .gaps b { font-family: var(--display); font-size: 17px; color: var(--ink); display: block; }
+  .gaps p { margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
+  .ob-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ob-dots { display: flex; gap: 8px; }
+  .ob-dots button { width: 10px; height: 10px; border-radius: 50%; border: 0; padding: 0; background: var(--line); cursor: pointer; }
+  .ob-dots button[aria-current="step"] { background: var(--lamp); width: 26px; border-radius: 5px; }
+  .ob-right { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ob-fade { animation: obin 0.45s ease both; }
+  @keyframes obin { from { opacity: 0; transform: translateY(8px); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ob-fade { animation: none; }
+    .card, .fill, .btn, .opt { transition: none; }
+    .big, .confetti i, .tw, .kicker::before { animation: none; }
+    #sky, #stars, #skyline rect.win { transition: none; }
+    .confetti { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="sky" aria-hidden="true"><div id="stars"></div></div>
+<div class="page">
+  <header>
+    <div class="kicker">nyc 311 service requests · 2025</div>
+    <h1>Guess the Hour</h1>
+    <p class="lede">New York complains about different things at different hours. From 11 PM to 3 AM, <b>more than half of everything reported to 311 is noise</b>. By 9 AM, noise is under a tenth and the line fills with parking, trash and broken apartments. Play six quick rounds, or explore the whole day on the dial.</p>
+    <svg id="skyline" viewBox="0 0 1100 84" preserveAspectRatio="xMidYMax slice" aria-hidden="true"></svg>
+  </header>
+
+  <section class="onboard" id="onboard" aria-label="Introduction" aria-live="polite">
+    <div class="ob-top"><span class="ob-count" id="ob-count"></span><button class="linkbtn" id="ob-skip">Skip the intro</button></div>
+    <div class="ob-body" id="ob-body">
+      <div class="ob-text"><div class="ob-kick" id="ob-kick"></div><h2 id="ob-title"></h2><p id="ob-copy"></p></div>
+      <div class="ob-vis" id="ob-vis"></div>
+    </div>
+    <div class="ob-nav">
+      <button class="btn ghost" id="ob-back">Back</button>
+      <div class="ob-dots" id="ob-dots" aria-label="Intro steps"></div>
+      <div class="ob-right"><button class="btn ghost" id="ob-alt" hidden>Explore the day instead</button><button class="btn" id="ob-next">Next</button></div>
+    </div>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Mode">
+    <button class="tab" id="tab-play" role="tab" aria-selected="true" aria-controls="panel-play">Play</button>
+    <button class="tab" id="tab-explore" role="tab" aria-selected="false" aria-controls="panel-explore">Explore the day</button>
+    <button class="linkbtn" id="ob-replay">How it works</button>
+    <span class="skytime" id="skytime" aria-live="off"></span>
+  </div>
+
+  <div class="stage">
+    <div class="visual">
+      <div class="vis" id="vis-dial">
+        <svg id="dial" class="big" tabindex="0" viewBox="-280 -280 560 560" role="img" aria-label="24-hour dial of 311 requests by category"></svg>
+        <div id="tip" hidden></div>
+      </div>
+      <div class="vis" id="vis-wave" hidden>
+        <svg id="wave" class="big" tabindex="0" viewBox="-280 -268 560 330" role="img" aria-label="Wavelength gauge: drag the needle to your guess, or use the arrow keys"></svg>
+      </div>
+      <div class="cardwrap" id="vis-card" hidden>
+        <div class="card">
+          <div class="face front">
+            <div class="tag">Flashcard</div>
+            <p class="q" id="card-q"></p>
+            <div class="vs" id="card-vs"></div>
+          </div>
+          <div class="face back">
+            <div class="tag">Answer</div>
+            <p class="ans" id="card-ans"></p>
+            <p class="fact" id="card-fact"></p>
+            <div class="cmp" id="card-cmp"></div>
+          </div>
+        </div>
+      </div>
+      <div class="controls" id="dial-controls">
+        <button class="step" id="prev" aria-label="Previous hour">◀</button>
+        <input type="range" id="hour-slider" min="0" max="23" step="1" value="3" aria-label="Hour of day">
+        <button class="step" id="next" aria-label="Next hour">▶</button>
+        <div class="seg" id="scale-seg" role="group" aria-label="Wedge height shows">
+          <button id="scale-mix" aria-pressed="true">Mix</button>
+          <button id="scale-volume" aria-pressed="false">Volume</button>
+        </div>
+      </div>
+      <div class="actions" id="g-actions"></div>
+      <p class="caption" id="vis-caption"></p>
+    </div>
+
+    <div class="panel" id="panel-play" role="tabpanel" aria-labelledby="tab-play"></div>
+
+    <div class="panel" id="panel-explore" role="tabpanel" aria-labelledby="tab-explore" hidden>
+      <h2 id="ex-title"></h2>
+      <div class="meta" id="ex-meta"></div>
+      <p id="ex-sentence"></p>
+      <ul class="rows" id="ex-rows"></ul>
+      <div class="key"><i></i> all-day share of that category</div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <section>
+      <h3>The data</h3>
+      <p><a href="https://data.cityofnewyork.us/d/erm2-nwe9">311 Service Requests from 2010 to Present</a>, NYC Open Data. Every request created in 2025: 3,653,118 rows, counted by the hour in <code>created_date</code> and grouped into nine categories. Every question in the game is generated from these counts.</p>
+    </section>
+    <section>
+      <h3>How it was cleaned</h3>
+      <ul>
+        <li>1,923 Health Department records stamped exactly 12:00:00 AM were removed. They carry a date but no real time.</li>
+        <li>Categories come from <code>complaint_type</code> and <code>agency</code>: types starting with “Noise”; Illegal Parking and Blocked Driveway; HEAT/HOT WATER; other housing (HPD) requests; Sanitation (DSNY); Transportation (DOT); Water System and Sewer; Encampment and Homeless Person Assistance.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>What it can't show</h3>
+      <ul>
+        <li>311 counts who calls, not what happens. Neighborhoods that trust the city less report less.</li>
+        <li>Requests about unhoused people are filed by others, about them. They appear here only as citywide totals per hour.</li>
+        <li>The hour is when the request was filed, not when the problem began.</li>
+      </ul>
+    </section>
+  </div>
+
+  <details>
+    <summary>Table: share of requests by hour and category</summary>
+    <div class="tablewrap"><table id="table"></table></div>
+  </details>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script>
+(function () {
+  const DATA = {"total":[128790,87106,60010,48095,44610,51253,84261,137027,188217,211342,217736,213196,202825,198203,195815,191871,185641,175787,170287,168204,168211,179112,186413,159106],"cats":[{"id":"noise","label":"Noise","v":[67615,46608,30617,22517,17791,14701,15440,16760,18025,19576,20928,21464,22637,23115,24306,26872,29407,32372,36992,43236,51684,64137,85267,80934]},{"id":"heat","label":"Heat & hot water","v":[9151,6540,4882,4497,5121,6569,10039,15570,17009,18758,18652,17146,16014,15558,14208,14763,15794,15377,15885,16447,16940,16012,13430,11584]},{"id":"parking","label":"Parking & blocked driveways","v":[25963,15686,11588,10135,10546,14599,24265,37751,47257,44691,40361,39504,37611,35676,33551,32313,31672,34751,36767,36071,38001,42475,38538,30208]},{"id":"housing","label":"Apartment repairs","v":[6870,4725,3382,3133,3152,3795,7080,12650,20240,32359,39789,40124,38139,37556,34365,33103,29402,23171,19266,17895,14821,13237,11602,8733]},{"id":"trash","label":"Trash & sanitation","v":[2989,1998,1375,1187,1354,2257,8168,18672,31403,29268,27684,25924,23670,21552,20493,18878,18268,15926,13846,11910,9553,8497,7128,4780]},{"id":"streets","label":"Streets, lights & signals","v":[3041,2432,1516,1403,1571,2315,5333,9609,11719,14413,14968,14016,13068,14306,19246,16424,13538,11031,8878,7841,6849,6625,6784,5177]},{"id":"homeless","label":"Homeless assistance & encampments","v":[1640,1554,1164,1123,1442,1626,3240,5568,7768,7522,6136,5642,4650,4887,4372,4029,3824,3749,3554,3064,2618,2354,2050,1593]},{"id":"water","label":"Water & sewer","v":[1089,643,428,308,388,721,1674,3801,5747,6811,7053,7056,6791,6669,7007,7703,7320,6688,6194,6071,4881,3820,2920,1760]},{"id":"other","label":"Everything else","v":[10432,6920,5058,3792,3245,4670,9022,16646,29049,37944,42165,42320,40245,38884,38267,37786,36416,32722,28905,25669,22864,21955,18694,14337]}]};
+  const CATS = DATA.cats, TOTAL = DATA.total, DAY = d3.sum(TOTAL), MAXT = d3.max(TOTAL);
+  CATS.forEach(c => { c.day = d3.sum(c.v) / DAY; c.color = `var(--s-${c.id})`; });
+  const REAL = CATS.filter(c => c.id !== "other");
+  const share = (c, h) => c.v[h] / TOTAL[h];
+  const fmtHour = h => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? "AM" : "PM"}`;
+  const fmtSpan = h => `${fmtHour(h)} to ${fmtHour((h + 1) % 24)}`;
+  const pct = x => x < 0.1 ? (x * 100).toFixed(1) + "%" : Math.round(x * 100) + "%";
+  const num = d3.format(",");
+  const circDist = (a, b) => Math.min(Math.abs(a - b), 24 - Math.abs(a - b));
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+  const lower = c => c.label.toLowerCase();
+  const MAXSHARE = 0.6;
+
+  /* ---------- the game: six rounds, three kinds, alternating ---------- */
+  const SEQUENCE = ["hour", "wave", "card", "hour", "wave", "card"];
+  const KIND = {
+    hour: { name: "Guess the hour", short: "Hour", max: 4 },
+    wave: { name: "Wavelength", short: "Wave", max: 4 },
+    card: { name: "Flashcard", short: "Card", max: 2 }
+  };
+  const MAXSCORE = d3.sum(SEQUENCE, k => KIND[k].max);
+  const ICON = {
+    hour: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    wave: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 17a9 9 0 0 1 18 0"/><path d="M12 17l4-6"/></svg>',
+    card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="4" y="6" width="13" height="15" rx="2"/><path d="M8 3h10a2 2 0 0 1 2 2v12"/></svg>'
+  };
+  const CONF = ["var(--lamp)", "var(--coral)", "var(--mint)", "var(--rose)", "#b49cff"];
+  function burst(on) {
+    if (!on) return "";
+    return `<div class="confetti" aria-hidden="true">${d3.range(26).map(i => `<i style="left:${(10 + Math.random() * 80).toFixed(0)}%;background:${CONF[i % 5]};animation-delay:${(Math.random() * 0.2).toFixed(2)}s;--dx:${(Math.random() * 140 - 70).toFixed(0)}px;--dy:${(-60 - Math.random() * 90).toFixed(0)}px;--r:${(Math.random() * 720 - 360).toFixed(0)}deg"></i>`).join("")}</div>`;
+  }
+
+  function buildHour(used) {
+    const pool = d3.range(24).filter(h => !used.hours.has(h));
+    const h = pick(pool); used.hours.add(h);
+    return { type: "hour", h, guess: null, hint: false };
+  }
+  function niceMax(x) { return Math.max(5, Math.ceil(x * 115 / 5) * 5); }
+  function buildWave(used) {
+    if (!used.volume && Math.random() < 0.4) {
+      used.volume = true;
+      const h = pick([0, 1, 3, 4, 5, 6, 7, 13, 17, 20, 23].filter(x => !used.hours.has(x)));
+      used.hours.add(h);
+      return { type: "wave", kind: "volume", h, value: TOTAL[h] / MAXT * 100, max: 100,
+        prompt: `How busy is the 311 line at ${fmtHour(h)}?`,
+        sub: "0 means silent. 100 means as busy as the busiest hour of the day (10 AM).",
+        left: "Silent", right: "Busiest", fmt: v => Math.round(v) + "",
+        fact: `At ${fmtHour(h)} the line runs at ${Math.round(TOTAL[h] / MAXT * 100)}% of its 10 AM peak (${num(TOTAL[h])} requests over the year).`, guess: null };
+    }
+    const cands = [];
+    REAL.filter(c => !used.cats.has(c.id)).forEach(c => {
+      const s = d3.range(24).map(h => share(c, h));
+      const pk = d3.maxIndex(s), lo = d3.minIndex(s);
+      cands.push([c, pk], [c, pk], [c, lo], [c, (pk + 12) % 24]);
+    });
+    const [c, h] = pick(cands); used.cats.add(c.id);
+    const M = niceMax(d3.max(d3.range(24), x => share(c, x)));
+    const v = share(c, h) * 100;
+    return { type: "wave", kind: "share", c, h, value: v, max: M,
+      prompt: `At ${fmtHour(h)}, what share of all 311 requests is about ${lower(c)}?`,
+      sub: `Set the dial anywhere from 0% to ${M}%.`,
+      left: "0%", right: M + "%", fmt: x => (x < 10 ? x.toFixed(1) : Math.round(x)) + "%",
+      fact: `At ${fmtHour(h)}, ${lower(c)} is ${pct(v / 100)} of all requests (its all-day share is ${pct(c.day)}).`, guess: null };
+  }
+  function buildCard(used) {
+    for (let t = 0; t < 200; t++) {
+      if (Math.random() < 0.5) {
+        const h = Math.floor(Math.random() * 24);
+        const fresh = REAL.filter(x => !used.cats.has(x.id)); const [a, b] = d3.shuffle((fresh.length >= 2 ? fresh : REAL).slice()).slice(0, 2);
+        const sa = share(a, h), sb = share(b, h);
+        const key = `cats:${[a.id, b.id].sort()}:${h}`;
+        if (Math.abs(sa - sb) < 0.03 || Math.min(sa, sb) < 0.015 || used.cards.has(key)) continue;
+        used.cards.add(key);
+        const win = sa > sb ? 0 : 1;
+        return { type: "card", h, q: `At ${fmtHour(h)}, which do New Yorkers report more?`,
+          options: [a.label, b.label], correct: win, choice: null,
+          answer: [a.label, b.label][win],
+          fact: `From ${fmtSpan(h)}: ${lower(a)} ${pct(sa)}, ${lower(b)} ${pct(sb)} of all requests.`,
+          bars: [{ label: a.label, v: sa, color: a.color }, { label: b.label, v: sb, color: b.color }] };
+      } else {
+        const fresh = REAL.filter(x => !used.cats.has(x.id));
+        const c = pick(fresh.length ? fresh : REAL);
+        const h1 = Math.floor(Math.random() * 24), h2 = Math.floor(Math.random() * 24);
+        const s1 = share(c, h1), s2 = share(c, h2);
+        const key = `hours:${c.id}:${[h1, h2].sort()}`;
+        if (circDist(h1, h2) < 4 || Math.max(s1, s2) / Math.min(s1, s2) < 1.4 || used.cards.has(key)) continue;
+        used.cards.add(key);
+        const win = s1 > s2 ? 0 : 1;
+        return { type: "card", q: `When is ${lower(c)} a bigger share of 311 requests?`,
+          options: [fmtHour(h1), fmtHour(h2)], correct: win, choice: null,
+          answer: [fmtHour(h1), fmtHour(h2)][win],
+          fact: `${c.label}: ${pct(s1)} of requests at ${fmtHour(h1)}, ${pct(s2)} at ${fmtHour(h2)}.`,
+          bars: [{ label: fmtHour(h1), v: s1, color: c.color }, { label: fmtHour(h2), v: s2, color: c.color }] };
+      }
+    }
+  }
+  function newGame() {
+    const used = { hours: new Set(), cats: new Set(), cards: new Set(), volume: false };
+    const rounds = SEQUENCE.map(k => k === "hour" ? buildHour(used) : k === "wave" ? buildWave(used) : buildCard(used));
+    rounds.forEach(r => { r.points = null; });
+    return { rounds, i: 0, phase: "intro" };
+  }
+
+  /* scoring: every kind on the same small scale, Wavelength style */
+  function scoreHour(r) { const d = circDist(r.guess, r.h); return Math.max(0, [4, 3, 2, 1][d] ?? 0) - (r.hint ? 1 : 0); }
+  const BANDS = [[0.05, 4], [0.11, 3], [0.18, 2]];
+  function scoreWave(r) { const e = Math.abs(r.guess - r.value) / r.max; for (const [w, p] of BANDS) { if (e <= w) return p; } return 0; }
+
+  const state = { tab: "play", hour: 3, scale: "mix", game: newGame(), ob: location.hash === "#play" ? -1 : 0 };
+  const cur = () => state.game.rounds[state.game.i];
+  const score = () => d3.sum(state.game.rounds, r => r.points || 0);
+
+  /* ---------- 24-hour dial ---------- */
+  const R0 = 92, R1 = 208, STEP = 2 * Math.PI / 24;
+  const svg = d3.select("#dial");
+  const gW = svg.append("g"), gHov = svg.append("g"), gTicks = svg.append("g"), gHand = svg.append("g"), gCenter = svg.append("g");
+  svg.append("circle").attr("r", R1 + 50).attr("fill", "transparent").style("cursor", "pointer");
+  const arc = d3.arc().padAngle(0.014).padRadius(R1).cornerRadius(2);
+  const polar = (h, r) => [Math.sin(h * STEP) * r, -Math.cos(h * STEP) * r];
+  for (let h = 0; h < 24; h++) {
+    const major = h % 3 === 0;
+    const [x1, y1] = polar(h, R1 + 6), [x2, y2] = polar(h, R1 + (major ? 14 : 10));
+    gTicks.append("line").attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2)
+      .attr("stroke", "var(--ink-3)").attr("stroke-width", major ? 1.5 : 1).attr("opacity", major ? 0.9 : 0.5);
+    if (major) { const [x, y] = polar(h, R1 + 38); gTicks.append("text").attr("class", "tick-label").attr("x", x).attr("y", y).attr("text-anchor", "middle").attr("dominant-baseline", "central").text(fmtHour(h)); }
+  }
+  const hovPath = gHov.append("path").attr("class", "hover-wedge").attr("fill", "var(--lamp)").attr("fill-opacity", 0.22)
+    .attr("stroke", "var(--lamp)").attr("stroke-width", 2.5).attr("stroke-linejoin", "round").attr("opacity", 0);
+  const hovArc = d3.arc().innerRadius(R0 - 5).outerRadius(R1 + 8).padAngle(0.01).padRadius(R1).cornerRadius(4);
+  let hoverHour = null;
+  function drawHover() {
+    if (hoverHour === null) { hovPath.attr("opacity", 0); return; }
+    hovPath.attr("d", hovArc({ startAngle: hoverHour * STEP, endAngle: (hoverHour + 1) * STEP })).attr("opacity", 1);
+  }
+  const cTime = gCenter.append("text").attr("class", "center-time").attr("text-anchor", "middle").attr("y", 8);
+  const cSub = gCenter.append("text").attr("class", "center-sub").attr("text-anchor", "middle").attr("y", 34);
+  const cSub2 = gCenter.append("text").attr("class", "center-sub2").attr("text-anchor", "middle").attr("y", 54);
+  const radial = () => state.scale === "mix" ? d3.scaleRadial().domain([0, 1]).range([R0, R1]) : d3.scaleRadial().domain([0, MAXT]).range([R0, R1]);
+  function segments(h) {
+    const r = radial(); let acc = 0;
+    return CATS.map(c => { const a = acc, b = acc + (state.scale === "mix" ? share(c, h) : c.v[h]); acc = b; return { c, h, ri: r(a), ro: r(b) }; });
+  }
+  // dial modes: "explore" | "blank" (pick an hour) | "reveal" | "mix" (decor)
+  function dialMode() {
+    if (state.tab === "explore") return "explore";
+    const g = state.game, r = cur();
+    if (g.phase === "round" && r.type === "hour") return r.phase === "reveal" ? "reveal" : "blank";
+    return "mix";
+  }
+  function drawDial() {
+    const mode = dialMode(), r = state.tab === "play" ? cur() : null;
+    const blank = mode === "blank";
+    let focus = mode === "explore" ? state.hour : mode === "reveal" ? r.h : null;
+    const paths = [];
+    for (let h = 0; h < 24; h++) {
+      if (blank) paths.push({ d: arc({ innerRadius: R0, outerRadius: R1, startAngle: h * STEP, endAngle: (h + 1) * STEP }), fill: r.guess === h ? "var(--ink)" : "var(--well)", op: 1 });
+      else segments(h).forEach(s => paths.push({ d: arc({ innerRadius: s.ri, outerRadius: s.ro, startAngle: h * STEP, endAngle: (h + 1) * STEP }), fill: s.c.color,
+        op: focus === null || focus === h || (mode === "reveal" && r.guess === h) ? 1 : 0.6 }));
+    }
+    gW.selectAll("path").data(paths).join("path").attr("d", d => d.d).attr("fill", d => d.fill).attr("opacity", d => d.op).attr("stroke", "var(--surface)").attr("stroke-width", 1.5);
+    const hands = [];
+    if (mode === "explore") hands.push({ h: state.hour, kind: "main" });
+    if (blank && r.guess !== null) hands.push({ h: r.guess, kind: "main" });
+    if (mode === "reveal") { if (r.guess !== r.h) hands.push({ h: r.guess, kind: "guess" }); hands.push({ h: r.h, kind: "main" }); }
+    gHand.selectAll("g").data(hands).join(e => { const g = e.append("g"); g.append("line"); g.append("circle"); return g; }).each(function (d) {
+      const [x1, y1] = polar(d.h + 0.5, R0 - 8), [x2, y2] = polar(d.h + 0.5, R1 + 2), col = d.kind === "main" ? "var(--lamp)" : "var(--ink-2)";
+      d3.select(this).select("line").attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2).attr("stroke", col).attr("stroke-width", 2.5).attr("stroke-linecap", "round").attr("stroke-dasharray", d.kind === "guess" ? "2 7" : null);
+      d3.select(this).select("circle").attr("cx", x2).attr("cy", y2).attr("r", 6).attr("fill", col).attr("stroke", "var(--surface)").attr("stroke-width", 2);
+    });
+    if (mode === "explore") { cTime.text(fmtHour(state.hour)); cSub.text(num(TOTAL[state.hour]) + " requests"); cSub2.text(pct(TOTAL[state.hour] / DAY) + " of the day"); }
+    else if (blank) {
+      const prev = hoverHour !== null && hoverHour !== r.guess;
+      cTime.text(prev ? fmtHour(hoverHour) : r.guess === null ? "?" : fmtHour(r.guess));
+      cSub.text(prev ? "tap to pick" : r.guess === null ? "pick an hour" : "your guess"); cSub2.text("");
+    }
+    else if (mode === "reveal") { cTime.text(fmtHour(r.h)); cSub.text("the answer"); cSub2.text(r.guess === r.h ? "" : "you said " + fmtHour(r.guess)); }
+    else if (state.game.phase === "done") { cTime.text(score()); cSub.text("out of " + MAXSCORE); cSub2.text(""); }
+    else { cTime.text("24h"); cSub.text("of 311 requests"); cSub2.text(""); }
+    drawHover();
+    const sl = document.getElementById("hour-slider");
+    if (mode === "explore") sl.value = state.hour; else if (blank && r.guess !== null) sl.value = r.guess;
+  }
+
+  /* ---------- Wavelength gauge ---------- */
+  const WR = 232, WR0 = 36;
+  const wsvg = d3.select("#wave");
+  const warc = d3.arc();
+  const fToA = f => -Math.PI / 2 + f * Math.PI;
+  const wpt = (f, r) => [Math.sin(fToA(f)) * r, -Math.cos(fToA(f)) * r];
+  wsvg.append("path").attr("d", warc({ innerRadius: WR0, outerRadius: WR, startAngle: -Math.PI / 2, endAngle: Math.PI / 2 })).attr("fill", "var(--well)");
+  const gBands = wsvg.append("g"), gWTicks = wsvg.append("g"), gNeedle = wsvg.append("g"), gWLab = wsvg.append("g");
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => { const [x1, y1] = wpt(f, WR + 4), [x2, y2] = wpt(f, WR + 14); gWTicks.append("line").attr("x1", x1).attr("y1", y1).attr("x2", x2).attr("y2", y2).attr("stroke", "var(--ink-3)").attr("stroke-width", 1.5); });
+  const wLeft = gWLab.append("text").attr("class", "tick-label").attr("x", -WR + 10).attr("y", 34).attr("text-anchor", "start");
+  const wRight = gWLab.append("text").attr("class", "tick-label").attr("x", WR - 10).attr("y", 34).attr("text-anchor", "end");
+  const wMid = gWLab.append("text").attr("class", "tick-label").attr("x", 0).attr("y", -WR - 22).attr("text-anchor", "middle");
+  const needle = gNeedle.append("line").attr("stroke", "var(--coral)").attr("stroke-width", 5).attr("stroke-linecap", "round");
+  const knob = gNeedle.append("circle").attr("r", 13).attr("fill", "var(--coral)").attr("stroke", "var(--surface)").attr("stroke-width", 3);
+  gNeedle.append("circle").attr("r", 20).attr("fill", "var(--coral)");
+  const ansLine = wsvg.append("line").attr("stroke", "var(--ink)").attr("stroke-width", 2).attr("stroke-dasharray", "3 5");
+  const ansText = wsvg.append("text").attr("class", "tick-label").attr("text-anchor", "middle").style("fill", "var(--ink)").style("font-size", "18px");
+  function drawWave() {
+    const r = cur(); if (!r || r.type !== "wave") return;
+    const mid = r.max / 2;
+    wLeft.text(r.left); wRight.text(r.right); wMid.text(r.kind === "share" ? (Number.isInteger(mid) ? mid : mid.toFixed(1)) + "%" : "50");
+    const g = r.guess === null ? r.max / 2 : r.guess, f = g / r.max;
+    const [nx, ny] = wpt(f, WR - 22);
+    needle.attr("x1", 0).attr("y1", 0).attr("x2", nx).attr("y2", ny);
+    knob.attr("cx", nx).attr("cy", ny);
+    gNeedle.attr("opacity", r.guess === null && r.phase !== "reveal" ? 0.55 : 1);
+    const show = r.phase === "reveal";
+    const fv = r.value / r.max, a0 = fToA(fv);
+    const bands = show ? BANDS.slice().reverse().map(([w, p], i) => ({ w, p, i })) : [];
+    const fills = { 2: "var(--lamp-3)", 3: "var(--lamp-2)", 4: "var(--lamp)" };
+    gBands.selectAll("path").data(bands).join("path")
+      .attr("d", d => warc({ innerRadius: WR0, outerRadius: WR, startAngle: Math.max(-Math.PI / 2, a0 - d.w * Math.PI), endAngle: Math.min(Math.PI / 2, a0 + d.w * Math.PI) }))
+      .attr("fill", d => fills[d.p]);
+    const labs = show ? [{ p: 4, a: a0 }, { p: 3, a: a0 - 0.08 * Math.PI }, { p: 3, a: a0 + 0.08 * Math.PI }, { p: 2, a: a0 - 0.145 * Math.PI }, { p: 2, a: a0 + 0.145 * Math.PI }]
+      .filter(d => d.a > -Math.PI / 2 + 0.05 && d.a < Math.PI / 2 - 0.05) : [];
+    gBands.selectAll("text").data(labs).join("text").attr("text-anchor", "middle").attr("dominant-baseline", "central")
+      .attr("x", d => Math.sin(d.a) * (WR - 34)).attr("y", d => -Math.cos(d.a) * (WR - 34))
+      .style("font-size", "20px").style("font-weight", 900).style("fill", d => d.p === 4 ? "var(--paper-ink)" : "var(--ink)").text(d => d.p);
+    const [ax1, ay1] = wpt(fv, WR0), [ax2, ay2] = wpt(fv, WR + 6), [tx, ty] = wpt(fv, WR + 26);
+    ansLine.attr("opacity", show ? 1 : 0).attr("x1", ax1).attr("y1", ay1).attr("x2", ax2).attr("y2", ay2);
+    ansText.attr("opacity", show ? 1 : 0).attr("x", tx).attr("y", Math.min(ty, -6)).text(r.fmt(r.value));
+  }
+  function wavePointer(ev) {
+    const r = cur(); if (!r || r.type !== "wave" || r.phase === "reveal") return;
+    const node = wsvg.node(), pt = node.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const p = pt.matrixTransform(node.getScreenCTM().inverse());
+    let a = Math.atan2(p.x, -p.y); a = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, a));
+    r.guess = Math.round(((a + Math.PI / 2) / Math.PI) * r.max * 10) / 10;
+    render();
+  }
+  let wDrag = false;
+  wsvg.node().addEventListener("pointerdown", ev => { wDrag = true; try { wsvg.node().setPointerCapture(ev.pointerId); } catch (e) {} wavePointer(ev); });
+  wsvg.node().addEventListener("pointermove", ev => { if (wDrag) wavePointer(ev); });
+  wsvg.node().addEventListener("pointerup", () => { wDrag = false; });
+  wsvg.node().addEventListener("pointercancel", () => { wDrag = false; });
+
+  /* ---------- flashcard ---------- */
+  function drawCard() {
+    const r = cur(), wrap = document.getElementById("vis-card");
+    if (!r || r.type !== "card") return;
+    document.getElementById("card-q").textContent = r.q;
+    document.getElementById("card-vs").innerHTML = r.options.map(o => `<span>${esc(o)}</span>`).join("");
+    document.getElementById("card-ans").textContent = r.answer;
+    document.getElementById("card-fact").textContent = r.fact;
+    const mx = d3.max(r.bars, b => b.v);
+    document.getElementById("card-cmp").innerHTML = r.bars.map(b => `<div class="row"><span class="sw" style="background:${b.color}"></span><span class="name">${esc(b.label)}</span><span class="val">${pct(b.v)}</span><div class="track"><div class="fill" style="width:${b.v / mx * 100}%;background:${b.color}"></div></div></div>`).join("");
+    wrap.classList.toggle("flipped", r.phase === "reveal");
+  }
+
+  /* ---------- category rows ---------- */
+  function drawRows(sel, h, withAvg) {
+    const li = d3.select(sel).selectAll("li").data(CATS, c => c.id).join(enter => {
+      const e = enter.append("li").attr("class", "row");
+      e.append("span").attr("class", "sw").style("background", c => c.color);
+      e.append("span").attr("class", "name").text(c => c.label);
+      e.append("span").attr("class", "val");
+      const t = e.append("div").attr("class", "track");
+      t.append("div").attr("class", "fill").style("background", c => c.color);
+      t.append("div").attr("class", "avg");
+      return e;
+    });
+    li.select(".val").text(c => pct(share(c, h)));
+    li.select(".fill").style("width", c => Math.min(100, share(c, h) / MAXSHARE * 100) + "%");
+    li.select(".avg").style("left", c => `calc(${c.day / MAXSHARE * 100}% - 1px)`).property("hidden", !withAvg);
+  }
+  const standout = h => d3.greatest(REAL, c => share(c, h) / c.day);
+
+  /* ---------- play panel ---------- */
+  const P = document.getElementById("panel-play");
+  function pipsHTML() {
+    const g = state.game;
+    return `<div class="pips" aria-label="Rounds">${g.rounds.map((r, i) => {
+      const cls = r.points !== null ? "done" : (g.phase === "round" && i === g.i ? "now" : "");
+      return `<span class="pip k-${r.type} ${cls}">${KIND[r.type].short}${r.points !== null ? " +" + r.points : ""}</span>`;
+    }).join("")}</div>`;
+  }
+  function headHTML(r) {
+    return `${pipsHTML()}<div class="scoreline"><span class="kind k-${r.type}">Round ${state.game.i + 1} of ${SEQUENCE.length} · ${KIND[r.type].name}</span><span class="pts">Score <b>${score()}</b> / ${MAXSCORE}</span></div>`;
+  }
+  function renderPlay() {
+    const g = state.game;
+    if (g.phase === "intro") {
+      P.innerHTML = `<h2>Six rounds. Three ways to read the city's clock.</h2>
+        <p>Every question comes from 3.65 million 311 requests made in 2025. The rounds take turns:</p>
+        <ul class="modes">
+          <li class="k-hour"><span class="mk">${ICON.hour}</span><div><b>Guess the hour</b><p>See what people reported in one secret hour. Pick that hour on the dial. <span class="worth">Up to 4 points.</span></p></div></li>
+          <li class="k-wave"><span class="mk">${ICON.wave}</span><div><b>Wavelength</b><p>Swing the needle to estimate a number, like how much of 3 AM is noise. <span class="worth">Bullseye: 4 points.</span></p></div></li>
+          <li class="k-card"><span class="mk">${ICON.card}</span><div><b>Flashcard</b><p>Two choices, one card. Pick one and the card flips. <span class="worth">2 points.</span></p></div></li>
+        </ul>
+        <div class="btnrow"><button class="btn" id="g-start">Start the game</button></div>`;
+      return;
+    }
+    if (g.phase === "done") {
+      const by = k => [d3.sum(g.rounds.filter(r => r.type === k), r => r.points), d3.sum(g.rounds.filter(r => r.type === k), r => KIND[r.type].max)];
+      const s = score(), verdict = s >= 16 ? "You can read this city by its complaints." : s >= 10 ? "Good ear. The night is easy; the workday blurs together." : "Harder than it looks. Daytime hours look almost alike, which is its own finding.";
+      P.innerHTML = `${burst(s >= 14)}<div class="finalscore">${s}<small> / ${MAXSCORE}</small></div><h2>${s >= 16 ? "Night owl." : s >= 10 ? "Nice ears." : "Rookie on the night shift."}</h2><p>${verdict}</p>
+        <div class="breakdown">${["hour", "wave", "card"].map(k => { const [a, b] = by(k); return `<div class="k-${k}"><div class="n">${a}/${b}</div><div class="l">${KIND[k].name}</div></div>`; }).join("")}</div>
+        <p><b>What you learned</b></p>
+        <ul class="learned">${g.rounds.map(r => `<li>${esc(r.type === "hour" ? `${fmtSpan(r.h)}: ${lower(standout(r.h))} is ${(share(standout(r.h), r.h) / standout(r.h).day).toFixed(1)}× its usual share.` : r.fact)}</li>`).join("")}</ul>
+        <div class="btnrow"><button class="btn" id="g-again">Play again</button><button class="btn ghost" id="g-explore">Explore the day</button></div>`;
+      return;
+    }
+    const r = cur();
+    if (r.type === "hour") {
+      const reveal = r.phase === "reveal";
+      P.innerHTML = `${headHTML(r)}
+        <h2>${reveal ? `It was ${fmtSpan(r.h)}` : "What time is it?"}</h2>
+        <p>${reveal ? "" : "This is everything New Yorkers reported to 311 in one hour of the day. Tap that hour on the dial, then lock it in."}</p>
+        <ul class="rows" id="g-rows"></ul>
+        ${r.hint ? `<p class="meta">Hint: this hour gets ${pct(TOTAL[r.h] / DAY)} of the day's requests. An average hour gets 4.2%, so the line is ${TOTAL[r.h] > DAY / 24 ? "busier" : "quieter"} than usual.</p>` : ""}
+        ${reveal ? `<div class="result">${burst(r.points === KIND[r.type].max)}<div class="big">${circDist(r.guess, r.h) === 0 ? "Exactly right." : circDist(r.guess, r.h) + " hour" + (circDist(r.guess, r.h) > 1 ? "s" : "") + " off."} <span class="plus">+${r.points}</span></div>
+            <p>The giveaway: <b>${lower(standout(r.h))}</b> is ${pct(share(standout(r.h), r.h))} of this hour, ${(share(standout(r.h), r.h) / standout(r.h).day).toFixed(1)} times its all-day share.</p>
+            </div>` : ""}`;
+      drawRows("#g-rows", r.h, reveal);
+    } else if (r.type === "wave") {
+      const reveal = r.phase === "reveal";
+      P.innerHTML = `${headHTML(r)}
+        <h2>${esc(r.prompt)}</h2><p>${esc(r.sub)}</p>
+        <div class="readout">${r.guess === null ? "–" : r.fmt(r.guess)}<small>${reveal ? "your guess" : "drag the needle"}</small></div>
+        ${reveal ? `<div class="result">${burst(r.points === KIND[r.type].max)}<div class="big">Answer: ${r.fmt(r.value)}. <span class="plus">+${r.points}</span></div><p>${esc(r.fact)}</p>
+            <p class="meta">Bullseye 4 points, next band 3, outer band 2.</p></div>` : ""}`;
+    } else {
+      const reveal = r.phase === "reveal";
+      P.innerHTML = `${headHTML(r)}
+        <h2>${esc(r.q)}</h2><p>${reveal ? "" : "Pick one. The card flips to show the answer."}</p>
+        <div class="opts">${r.options.map((o, i) => {
+          const cls = reveal ? (i === r.correct ? "right" : i === r.choice ? "wrong" : "") : "";
+          const badge = reveal ? (i === r.correct ? "Right answer" : i === r.choice ? "Your pick" : "") : "";
+          return `<button class="opt ${cls}" data-i="${i}" ${reveal ? "disabled" : ""}><span>${esc(o)}</span><span class="badge">${badge}</span></button>`;
+        }).join("")}</div>
+        ${reveal ? `<div class="result">${burst(r.points === KIND[r.type].max)}<div class="big">${r.choice === r.correct ? "Correct." : "Not this time."} <span class="plus">+${r.points}</span></div></div>` : ""}`;
+    }
+  }
+  const A = document.getElementById("g-actions");
+  function renderActions() {
+    const g = state.game, r = cur();
+    if (state.tab !== "play" || g.phase !== "round") { A.innerHTML = ""; A.hidden = true; return; }
+    A.hidden = false;
+    const last = g.i === SEQUENCE.length - 1;
+    if (r.phase === "reveal") { A.innerHTML = `<button class="btn" id="g-next">${last ? "See final score" : "Next round"}</button>`; return; }
+    if (r.type === "hour") A.innerHTML = `<button class="btn" id="g-lock" ${r.guess === null ? "disabled" : ""}>${r.guess === null ? "Pick an hour first" : "Lock in " + fmtHour(r.guess)}</button>
+      <button class="btn ghost" id="g-hint" ${r.hint ? "disabled" : ""}>Hint (−1)</button>`;
+    else if (r.type === "wave") A.innerHTML = `<button class="btn" id="g-lock" ${r.guess === null ? "disabled" : ""}>${r.guess === null ? "Move the needle first" : "Lock in " + r.fmt(r.guess)}</button>`;
+    else { A.innerHTML = ""; A.hidden = true; }
+  }
+  function act(id, el) {
+    const g = state.game, r = cur(), t = el || { id, classList: { contains: () => false } };
+    if (t.id === "g-start") { g.phase = "round"; g.i = 0; r.phase = "ask"; }
+    else if (t.id === "g-again") { state.game = newGame(); state.game.phase = "round"; cur().phase = "ask"; }
+    else if (t.id === "g-explore") { state.tab = "explore"; }
+    else if (t.id === "g-hint") { r.hint = true; }
+    else if (t.id === "g-lock") {
+      if (r.guess === null || r.phase === "reveal") return false;
+      r.points = r.type === "hour" ? Math.max(0, scoreHour(r)) : scoreWave(r); r.phase = "reveal";
+    }
+    else if (t.classList.contains("opt") && r.type === "card" && r.phase !== "reveal") {
+      r.choice = +t.dataset.i; r.points = r.choice === r.correct ? 2 : 0; r.phase = "reveal";
+    }
+    else if (t.id === "g-next") { if (g.i === SEQUENCE.length - 1) g.phase = "done"; else { g.i++; cur().phase = "ask"; } }
+    else return false;
+    render();
+    return true;
+  }
+  function onPlayClick(ev) {
+    const t = ev.target.closest("button"); if (!t) return;
+    if (act(t.id, t) && ev.detail === 0) {
+      const f = document.querySelector("#g-actions #g-next, #g-actions #g-lock:not(:disabled), #panel-play .opt, #g-start, #g-again"); if (f) f.focus();
+    }
+  }
+  P.addEventListener("click", onPlayClick);
+  A.addEventListener("click", onPlayClick);
+  wsvg.node().addEventListener("keydown", ev => {
+    const r = cur(); if (!r || r.type !== "wave" || r.phase === "reveal") return;
+    const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[ev.key];
+    if (d) { ev.preventDefault(); const g = r.guess === null ? r.max / 2 : r.guess; r.guess = Math.max(0, Math.min(r.max, Math.round((g + d * r.max / 50) * 10) / 10)); render(); }
+    else if (ev.key === "Enter") { ev.preventDefault(); act("g-lock"); }
+  });
+
+  /* ---------- explore panel ---------- */
+  function renderExplore() {
+    const h = state.hour, top = d3.greatest(REAL, c => share(c, h)), so = standout(h), lift = share(so, h) / so.day;
+    document.getElementById("ex-title").textContent = fmtSpan(h);
+    document.getElementById("ex-meta").textContent = `${num(TOTAL[h])} requests in 2025 · ${pct(TOTAL[h] / DAY)} of the day`;
+    let s = `The biggest slice is <b>${esc(lower(top))}</b> at ${pct(share(top, h))}.`;
+    s += so.id !== top.id ? ` What stands out is <b>${esc(lower(so))}</b>: ${pct(share(so, h))} of this hour, ${lift.toFixed(1)} times its all-day share.` : ` That is ${lift.toFixed(1)} times its all-day share of ${pct(top.day)}.`;
+    document.getElementById("ex-sentence").innerHTML = s;
+    drawRows("#ex-rows", h, true);
+  }
+
+  /* ---------- onboarding ---------- */
+  // Six short steps: orientation (what 311 is), two contrasts (3 AM vs 10 AM), the clues (each problem's peak hour),
+  // the limits of the data (the undercurrent), then the invitation to play. The sky follows each step's hour.
+  const C = id => CATS.find(c => c.id === id);
+  const GAPICON = {
+    trust: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/><path d="M3 3l18 18"/></svg>',
+    others: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M17 7h4M19 5v4"/></svg>',
+    time: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+  };
+  const STEPS = [
+    { sky: 3, kick: "Undercurrents · NYC 311 data",
+      title: "It's 3 AM. Someone in New York is still awake, and calling 311.",
+      copy: "311 is the city's line for problems that aren't emergencies: no heat, a blocked driveway, a party next door. In 2025 New Yorkers made <b>3.65 million</b> requests. Each one is a moment when somebody picked up the phone or opened the app.",
+      draw: drawObVolume },
+    { sky: 3, kick: "What the night sounds like",
+      title: "At this hour, almost half the requests are about noise.",
+      copy: `Between 3 and 4 AM, <b>${pct(share(C("noise"), 3))}</b> of everything reported is noise: music, parties, car alarms. Blocked driveways come next.`,
+      draw: () => drawObMix([3]) },
+    { sky: 10, kick: "Seven hours later",
+      title: "By 10 AM, the city sounds completely different.",
+      copy: `About <b>${(TOTAL[10] / TOTAL[3]).toFixed(1)} times</b> as many requests come in, and noise falls to <b>${pct(share(C("noise"), 10))}</b>. Now the line fills with parking, broken apartments, trash and streets.`,
+      draw: () => drawObMix([3, 10]) },
+    { sky: 6, kick: "The clues",
+      title: "Every kind of problem has its own hour.",
+      copy: "Heat complaints peak before dawn. Parking peaks at 6 AM. Trash peaks at 8 AM. These rhythms are the clues you'll use in the game.",
+      draw: drawObPeaks },
+    { sky: 21, kick: "The undercurrent",
+      title: "What this clock can't hear.",
+      copy: "This data shows who reports, not everything that goes wrong. Keep these gaps in mind while you play.",
+      draw: drawObGaps },
+    { sky: null, kick: "Your turn",
+      title: "Can you read the hour?",
+      copy: "Six quick rounds. Each round gives you a clue from the data, and you make a guess. Rounds take turns between three kinds:",
+      draw: drawObModes }
+  ];
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const dur = ms => reduceMotion() ? 0 : ms;
+  const OBV = document.getElementById("ob-vis");
+  const obW = () => Math.max(300, Math.min(560, OBV.clientWidth || 520));
+  function obSvg(w, h) { OBV.innerHTML = ""; return d3.select(OBV).append("svg").attr("viewBox", `0 0 ${w} ${h}`).attr("role", "img"); }
+  function drawObVolume() {
+    const W = obW(), H = 300, svgO = obSvg(W, H).attr("aria-label", "Requests per hour of the day; 3 AM highlighted");
+    svgO.append("text").attr("class", "bignum").attr("x", 0).attr("y", 62).text(num(TOTAL[3]));
+    svgO.append("text").attr("class", "lab").attr("x", 0).attr("y", 92).text("requests between 3 and 4 AM in 2025");
+    const x = d3.scaleBand().domain(d3.range(24)).range([0, W]).padding(0.18), y = d3.scaleLinear().domain([0, MAXT]).range([270, 120]);
+    svgO.append("g").selectAll("rect").data(TOTAL).join("rect").attr("x", (d, i) => x(i)).attr("width", x.bandwidth()).attr("rx", 3)
+      .attr("fill", (d, i) => i === 3 ? "var(--lamp)" : "var(--well)").attr("y", 270).attr("height", 0)
+      .transition().duration(dur(700)).delay((d, i) => dur(i * 18)).attr("y", d => y(d)).attr("height", d => 270 - y(d));
+    [0, 6, 12, 18].forEach(h => svgO.append("text").attr("class", "lab-3").attr("x", x(h)).attr("y", 292).text(fmtHour(h)));
+    svgO.append("text").attr("class", "lab-3").attr("x", W).attr("y", y(MAXT) - 8).attr("text-anchor", "end").text(`busiest: 10 AM, ${num(MAXT)}`);
+  }
+  function drawObMix(hours) {
+    const W = obW(), rowH = 64, H = hours.length * (rowH + 44) + 6, maxT = d3.max(hours, h => TOTAL[h]);
+    const svgO = obSvg(W, H).attr("aria-label", "Share of requests by category at " + hours.map(fmtHour).join(" and "));
+    hours.forEach((h, k) => {
+      const y0 = k * (rowH + 44) + 26, wTot = W * TOTAL[h] / maxT;
+      svgO.append("text").attr("class", "lab").attr("x", 0).attr("y", y0 - 8).text(`${fmtHour(h)} · ${num(TOTAL[h])} requests`);
+      let acc = 0;
+      const segs = CATS.map(c => { const s0 = acc; acc += c.v[h]; return { c, x0: s0 / TOTAL[h] * wTot, w: c.v[h] / TOTAL[h] * wTot }; });
+      const g = svgO.append("g");
+      g.selectAll("rect").data(segs).join("rect").attr("y", y0).attr("height", rowH).attr("fill", d => d.c.color)
+        .attr("stroke", "var(--surface)").attr("stroke-width", 1.5).attr("x", 0).attr("width", 0)
+        .transition().duration(dur(700)).attr("x", d => d.x0).attr("width", d => d.w);
+      segs.filter(d => d.w > 58).forEach(d => g.append("text").attr("x", d.x0 + 8).attr("y", y0 + rowH / 2 + 6)
+        .style("fill", "#fff").style("font-size", "16px").style("font-weight", 800).text(pct(share(d.c, h))).attr("opacity", 0)
+        .transition().delay(dur(600)).duration(dur(300)).attr("opacity", 1));
+    });
+    const top = ["noise", "parking", "heat", "housing", "trash"].map(C);
+    d3.select(OBV).append("div").attr("class", "ob-legend").html(top.map(c => `<span><i class="sw" style="background:${c.color}"></i>${esc(c.label)}</span>`).join("") + `<span><i class="sw" style="background:var(--s-other)"></i>Others</span>`);
+  }
+  function drawObPeaks() {
+    const ids = ["noise", "heat", "parking", "trash"], W = obW(), cols = W < 460 ? 1 : 2, cw = cols === 2 ? (W - 20) / 2 : W, ch = cols === 2 ? 128 : 112, H = (4 / cols) * (ch + 20) - 20;
+    const svgO = obSvg(W, H).attr("aria-label", "Share by hour for noise, heat, parking and trash, with each peak marked");
+    ids.forEach((id, k) => {
+      const c = C(id), s = d3.range(24).map(h => share(c, h)), pk = d3.maxIndex(s);
+      const gx = (k % cols) * (cw + 20), gy = Math.floor(k / cols) * (ch + 20);
+      const x = d3.scaleLinear().domain([0, 23]).range([gx + 4, gx + cw - 8]), y = d3.scaleLinear().domain([0, d3.max(s) * 1.1]).range([gy + ch - 20, gy + 44]);
+      const g = svgO.append("g");
+      g.append("rect").attr("x", gx).attr("y", gy).attr("width", cw).attr("height", ch).attr("rx", 14).attr("fill", "var(--well)");
+      g.append("text").attr("class", "lab").attr("x", gx + 14).attr("y", gy + 24).text(c.label.split(" ")[0].replace(/,$/, ""));
+      g.append("text").attr("class", "lab-3").attr("x", gx + cw - 14).attr("y", gy + 24).attr("text-anchor", "end").text(`peaks ${fmtHour(pk)} · ${pct(s[pk])}`);
+      g.append("path").attr("d", d3.area().x((d, i) => x(i)).y0(gy + ch - 20).y1(d => y(d)).curve(d3.curveMonotoneX)(s)).attr("fill", c.color).attr("opacity", 0.28);
+      const line = g.append("path").attr("d", d3.line().x((d, i) => x(i)).y(d => y(d)).curve(d3.curveMonotoneX)(s)).attr("fill", "none").attr("stroke", c.color).attr("stroke-width", 2.5);
+      const L = line.node().getTotalLength();
+      line.attr("stroke-dasharray", `${L} ${L}`).attr("stroke-dashoffset", L).transition().duration(dur(900)).attr("stroke-dashoffset", 0);
+      g.append("circle").attr("cx", x(pk)).attr("cy", y(s[pk])).attr("r", 5).attr("fill", "var(--lamp)").attr("stroke", "var(--surface)").attr("stroke-width", 2);
+      g.append("text").attr("class", "lab-3").attr("x", gx + 4).attr("y", gy + ch - 4).text("12 AM");
+      g.append("text").attr("class", "lab-3").attr("x", gx + cw - 8).attr("y", gy + ch - 4).attr("text-anchor", "end").text("11 PM");
+    });
+  }
+  function drawObGaps() {
+    OBV.innerHTML = `<ul class="gaps">
+      <li><span class="gi">${GAPICON.trust}</span><div><b>Quiet doesn't mean fine</b><p>Neighborhoods that trust the city less report less, so their problems look smaller here.</p></div></li>
+      <li><span class="gi">${GAPICON.others}</span><div><b>Some people only appear through others</b><p>Unhoused New Yorkers show up when someone else files a request about them. We keep those requests as citywide totals only.</p></div></li>
+      <li><span class="gi">${GAPICON.time}</span><div><b>The clock shows when people call</b><p>A request's time is when it was filed, not when the problem started.</p></div></li></ul>`;
+  }
+  function drawObModes() {
+    OBV.innerHTML = `<ul class="modes">
+      <li class="k-hour"><span class="mk">${ICON.hour}</span><div><b>Guess the hour</b><p>See what people reported in one secret hour. Tap that hour on the dial. <span class="worth">Up to 4 points.</span></p></div></li>
+      <li class="k-wave"><span class="mk">${ICON.wave}</span><div><b>Wavelength</b><p>Swing a needle to estimate a number. <span class="worth">Bullseye: 4 points.</span></p></div></li>
+      <li class="k-card"><span class="mk">${ICON.card}</span><div><b>Flashcard</b><p>Pick one of two answers and the card flips. <span class="worth">2 points.</span></p></div></li></ul>`;
+  }
+  let obDrawn = -1, obResize = null;
+  window.addEventListener("resize", () => { clearTimeout(obResize); obResize = setTimeout(() => { if (state.ob >= 0) { obDrawn = -1; render(); } }, 200); });
+  function renderOnboard() {
+    const i = state.ob, st = STEPS[i], last = i === STEPS.length - 1;
+    document.getElementById("ob-count").textContent = `Intro ${i + 1} of ${STEPS.length}`;
+    if (obDrawn !== i) {
+      obDrawn = i;
+      const body = document.getElementById("ob-body");
+      body.classList.remove("ob-fade"); void body.offsetWidth; body.classList.add("ob-fade");
+      document.getElementById("ob-kick").textContent = st.kick;
+      document.getElementById("ob-title").textContent = st.title;
+      document.getElementById("ob-copy").innerHTML = st.copy;
+      st.draw();
+    }
+    document.getElementById("ob-back").disabled = i === 0;
+    document.getElementById("ob-next").textContent = last ? "Start the game" : "Next";
+    document.getElementById("ob-alt").hidden = !last;
+    document.getElementById("ob-skip").hidden = last;
+    document.getElementById("ob-dots").innerHTML = STEPS.map((s, k) => `<button aria-label="Intro step ${k + 1}" ${k === i ? 'aria-current="step"' : ""} data-k="${k}"></button>`).join("");
+  }
+  function obGo(i) { state.ob = i; obDrawn = -1; render(); }
+  function obFinish(mode) {
+    state.ob = -1;
+    if (mode === "play") { state.tab = "play"; state.game = newGame(); state.game.phase = "round"; cur().phase = "ask"; }
+    else if (mode === "explore") state.tab = "explore";
+    render();
+    document.querySelector(mode === "explore" ? "#tab-explore" : "#tab-play").scrollIntoView({ block: "start", behavior: reduceMotion() ? "auto" : "smooth" });
+  }
+  document.getElementById("ob-next").addEventListener("click", () => state.ob === STEPS.length - 1 ? obFinish("play") : obGo(state.ob + 1));
+  document.getElementById("ob-back").addEventListener("click", () => { if (state.ob > 0) obGo(state.ob - 1); });
+  document.getElementById("ob-skip").addEventListener("click", () => obFinish("rules"));
+  document.getElementById("ob-alt").addEventListener("click", () => obFinish("explore"));
+  document.getElementById("ob-dots").addEventListener("click", ev => { const b = ev.target.closest("button"); if (b) obGo(+b.dataset.k); });
+  document.getElementById("ob-replay").addEventListener("click", () => { obGo(0); document.getElementById("onboard").scrollIntoView({ block: "start" }); });
+  document.addEventListener("keydown", ev => {
+    if (state.ob < 0 || ev.target.closest("input, textarea")) return;
+    if (ev.key === "ArrowRight") { ev.preventDefault(); document.getElementById("ob-next").click(); }
+    if (ev.key === "ArrowLeft" && state.ob > 0) { ev.preventDefault(); obGo(state.ob - 1); }
+  });
+
+  /* ---------- render ---------- */
+  function render() {
+    const onb = state.ob >= 0;
+    document.getElementById("onboard").hidden = !onb;
+    document.querySelector(".tabs").hidden = onb;
+    document.querySelector(".stage").hidden = onb;
+    document.querySelector(".lede").hidden = onb;
+    if (onb) { renderOnboard(); setSky(skyHour()); return; }
+    const explore = state.tab === "explore", g = state.game, r = cur();
+    document.getElementById("tab-play").setAttribute("aria-selected", !explore);
+    document.getElementById("tab-explore").setAttribute("aria-selected", explore);
+    document.getElementById("panel-play").hidden = explore;
+    document.getElementById("panel-explore").hidden = !explore;
+    const vis = explore || g.phase !== "round" ? "dial" : r.type === "hour" ? "dial" : r.type;
+    document.getElementById("vis-dial").hidden = vis !== "dial";
+    document.getElementById("vis-wave").hidden = vis !== "wave";
+    document.getElementById("vis-card").hidden = vis !== "card";
+    const mode = dialMode();
+    document.getElementById("dial-controls").hidden = mode !== "explore";
+    document.getElementById("scale-seg").hidden = mode !== "explore";
+    if (mode !== "explore") state.scale = "mix";
+    document.getElementById("scale-mix").setAttribute("aria-pressed", state.scale === "mix");
+    document.getElementById("scale-volume").setAttribute("aria-pressed", state.scale === "volume");
+    const cap = { explore: state.scale === "mix" ? "Each wedge is one hour, split by what people reported. Drag around the dial or use the slider." : "Wedge height is the number of requests. 10 AM gets 4.9 times as many as 4 AM.",
+      blank: "Midnight is at the top, and the day runs clockwise.",
+      reveal: "The yellow hand is the answer. The dotted hand is your guess.",
+      mix: "The full day of 311: each wedge is one hour, split by what people reported." };
+    document.getElementById("vis-caption").textContent = vis === "wave" ? (r.phase === "reveal" ? "The bands show where the answer was. Closer bands score more." : "Drag the needle to your guess.")
+      : vis === "card" ? (r.phase === "reveal" ? "The back of the card shows the numbers." : "Choose an answer to flip the card.") : cap[mode];
+    setSky(skyHour());
+    drawDial();
+    if (vis === "wave") drawWave();
+    if (vis === "card") drawCard();
+    if (explore) renderExplore(); else renderPlay();
+    renderActions();
+  }
+
+  /* ---------- dial pointer + controls ---------- */
+  const tip = document.getElementById("tip"), node = svg.node();
+  function locate(ev) {
+    const pt = node.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    const p = pt.matrixTransform(node.getScreenCTM().inverse());
+    let ang = Math.atan2(p.x, -p.y); if (ang < 0) ang += 2 * Math.PI;
+    return { h: Math.min(23, Math.floor(ang / STEP)), r: Math.hypot(p.x, p.y) };
+  }
+  function pickHour(h) {
+    const mode = dialMode();
+    if (mode === "explore") state.hour = h; else if (mode === "blank") cur().guess = h; else return;
+    render();
+  }
+  let dragging = false;
+  node.addEventListener("pointerdown", ev => { const { h, r } = locate(ev); if (r < R0 - 30) return; dragging = true; try { node.setPointerCapture(ev.pointerId); } catch (e) {} pickHour(h); });
+  node.addEventListener("pointermove", ev => {
+    const { h, r } = locate(ev); if (dragging) pickHour(h);
+    const mode = dialMode(), inRing = r >= R0 - 6 && r <= R1 + 10;
+    const nh = inRing ? h : null;
+    if (nh !== hoverHour) { hoverHour = nh; drawDial(); }
+    node.style.cursor = inRing && (mode === "explore" || mode === "blank") ? "pointer" : "default";
+    if (!inRing) { tip.hidden = true; return; }
+    if (mode === "blank") tip.innerHTML = `<b>${fmtSpan(h)}</b><br>${cur().guess === h ? "your guess" : "tap to pick this hour"}`;
+    else {
+      const seg = segments(h).find(s => r >= s.ri && r <= s.ro);
+      tip.innerHTML = `<b>${fmtSpan(h)}</b><br>` + (seg ? `<span class="sw" style="background:${seg.c.color};width:10px;height:10px;margin-right:6px"></span>${esc(seg.c.label)}: <b>${pct(share(seg.c, h))}</b> (${num(seg.c.v[h])})` : `${num(TOTAL[h])} requests`);
+    }
+    tip.hidden = false;
+    const box = node.getBoundingClientRect(), x = ev.clientX - box.left, y = ev.clientY - box.top;
+    tip.style.left = Math.max(0, Math.min(box.width - tip.offsetWidth, x + 14)) + "px";
+    tip.style.top = Math.max(0, y - tip.offsetHeight - 12) + "px";
+  });
+  node.addEventListener("pointerup", () => { dragging = false; });
+  node.addEventListener("pointercancel", () => { dragging = false; });
+  node.addEventListener("pointerleave", () => { tip.hidden = true; if (hoverHour !== null) { hoverHour = null; drawDial(); } });
+  node.addEventListener("keydown", ev => {
+    const mode = dialMode(); if (mode !== "explore" && mode !== "blank") return;
+    const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[ev.key];
+    if (d) { ev.preventDefault(); pickHour((curHour() + d + 24) % 24); }
+    else if (ev.key === "Enter" && mode === "blank") { ev.preventDefault(); act("g-lock"); }
+  });
+  const curHour = () => dialMode() === "explore" ? state.hour : (cur().guess ?? 0);
+  document.getElementById("hour-slider").addEventListener("input", e => pickHour(+e.target.value));
+  document.getElementById("prev").addEventListener("click", () => pickHour((curHour() + 23) % 24));
+  document.getElementById("next").addEventListener("click", () => pickHour((curHour() + 1) % 24));
+  document.getElementById("scale-mix").addEventListener("click", () => { state.scale = "mix"; render(); });
+  document.getElementById("scale-volume").addEventListener("click", () => { state.scale = "volume"; render(); });
+  document.getElementById("tab-play").addEventListener("click", () => { state.tab = "play"; render(); });
+  document.getElementById("tab-explore").addEventListener("click", () => { state.tab = "explore"; render(); });
+
+  /* ---------- table view ---------- */
+  const table = d3.select("#table");
+  table.append("thead").append("tr").selectAll("th").data(["Hour", ...CATS.map(c => c.label), "Requests"]).join("th").text(d => d);
+  table.append("tbody").selectAll("tr").data(d3.range(24)).join("tr").selectAll("td").data(h => [fmtHour(h), ...CATS.map(c => pct(share(c, h))), num(TOTAL[h])]).join("td").text(d => d);
+
+  /* ---------- sky + skyline: follow the selected hour ---------- */
+  // per hour: [top of sky, middle, horizon glow, stars 0..1, share of windows lit]
+  const SKY = [
+    ["#0d0a1f", "#24143a", "#4a2350", 1, 0.30], ["#0b0a1c", "#1f1236", "#3d1f4a", 1, 0.22],
+    ["#0b0a1c", "#1f1236", "#3a1d48", 1, 0.16], ["#0b0a1c", "#1d1234", "#3a1d48", 1, 0.12],
+    ["#120f28", "#251840", "#4d2a52", 0.9, 0.12], ["#1f1b45", "#4a2a60", "#c2577a", 0.6, 0.16],
+    ["#2f3a78", "#7a4a80", "#ff9a5a", 0.2, 0.18], ["#3d65a8", "#8a7aa0", "#ffc27a", 0, 0.12],
+    ["#2f6bb0", "#5a8ac0", "#a8d0f0", 0, 0.07], ["#2c6ab2", "#5a8cc4", "#a8d4f4", 0, 0.06],
+    ["#2a69b4", "#588cc6", "#acd6f6", 0, 0.05], ["#2868b4", "#568cc8", "#b0d8f8", 0, 0.05],
+    ["#2868b4", "#568cc8", "#b0d8f8", 0, 0.05], ["#2a69b2", "#5a8cc4", "#b4d6f2", 0, 0.05],
+    ["#2e68ae", "#6088c0", "#c8d8e8", 0, 0.06], ["#3a6aac", "#6a88b8", "#ffe0a0", 0, 0.07],
+    ["#3f5ea0", "#8a7aa8", "#ffc27a", 0, 0.09], ["#4a4a90", "#a05a80", "#ff9a5a", 0.05, 0.14],
+    ["#3a2a6a", "#9a3f6a", "#ff7a59", 0.2, 0.22], ["#2a1a4a", "#6a2a5a", "#e0567a", 0.5, 0.30],
+    ["#1e1238", "#45204e", "#9a3a6a", 0.8, 0.34], ["#170f2c", "#36193f", "#6a2a52", 1, 0.34],
+    ["#130d26", "#2e1638", "#5a2449", 1, 0.33], ["#100c22", "#28143a", "#4f2350", 1, 0.32]
+  ];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const starBox = document.getElementById("stars");
+  starBox.innerHTML = d3.range(70).map(() => `<i style="left:${(rnd() * 100).toFixed(1)}%;top:${(rnd() * 100).toFixed(1)}%;opacity:${(0.3 + rnd() * 0.7).toFixed(2)}"></i>`).join("");
+  const SKW = 1100, SKH = 84;
+  const sk = d3.select("#skyline");
+  const orb = sk.append("g");
+  const orbGlow = orb.append("circle").attr("r", 30);
+  const orbBody = orb.append("circle").attr("r", 13);
+  const wins = [];
+  for (let x = 0; x < SKW;) {
+    const w = 28 + rnd() * 52, h = 22 + rnd() * 58;
+    sk.append("rect").attr("x", x).attr("y", SKH - h).attr("width", w - 3).attr("height", h).attr("fill", rnd() < 0.5 ? "#2e1f30" : "#352436");
+    if (rnd() < 0.25) sk.append("rect").attr("x", x + w / 2 - 2).attr("y", SKH - h - 10).attr("width", 2).attr("height", 10).attr("fill", "#352436");
+    for (let wx = x + 6; wx < x + w - 10; wx += 9) {
+      for (let wy = SKH - h + 7; wy < SKH - 6; wy += 11) {
+        wins.push({ x: wx, y: wy, r: rnd(), d: (rnd() * 3).toFixed(2) });
+      }
+    }
+    x += w;
+  }
+  const winSel = sk.selectAll("rect.win").data(wins).join("rect").attr("class", "win").attr("x", d => d.x).attr("y", d => d.y).attr("width", 4).attr("height", 5)
+    .attr("fill", d => d.r < 0.04 ? "var(--coral)" : "var(--lamp)").style("animation-delay", d => d.d + "s");
+  let skyNow = null, orbKind = null;
+  function setSky(h) {
+    if (h === null || h === undefined || h === skyNow) return;
+    skyNow = h;
+    const [top, mid, glow, stars, lit] = SKY[h], root = document.documentElement.style;
+    root.setProperty("--sky-top", top); root.setProperty("--sky-mid", mid); root.setProperty("--sky-glow", glow);
+    starBox.style.opacity = stars;
+    winSel.style("opacity", d => d.r < lit ? 0.85 : 0).classed("tw", d => d.r < lit && d.r > lit - 0.03);
+    const day = h >= 6 && h < 18, t = ((day ? h - 6 : (h + 6) % 24) + 0.5) / 12;
+    const cx = 80 + t * 940, cy = 72 - Math.sin(Math.PI * t) * 58, kind = day ? "sun" : "moon";
+    orbBody.attr("fill", day ? "#ffd36b" : "#ffe6b3");
+    orbGlow.attr("fill", day ? "#ffb347" : "#ffe6b3").attr("opacity", day ? 0.35 : 0.12);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (orbKind !== kind || reduce) orb.interrupt().attr("transform", `translate(${cx},${cy})`);
+    else orb.transition().duration(900).ease(d3.easeCubicOut).attr("transform", `translate(${cx},${cy})`);
+    orbKind = kind;
+    document.getElementById("skytime").textContent = "Sky: " + fmtHour(h);
+  }
+  function skyHour() {
+    if (state.ob >= 0) return STEPS[state.ob].sky ?? new Date().getHours();
+    if (state.tab === "explore") return state.hour;
+    const g = state.game, r = cur();
+    if (g.phase !== "round") return new Date().getHours();
+    if (r.type === "hour") return r.phase === "reveal" ? r.h : r.guess;
+    return r.h ?? null;
+  }
+
+  render();
+  window.__gth = { state, newGame, render, obGo };
+})();
+</script>
+</body>
+</html>
