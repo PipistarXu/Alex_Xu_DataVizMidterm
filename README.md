@@ -61,9 +61,9 @@ Beneath the daytime city runs a night city that rarely appears in its official p
 
 | File | What it is |
 |---|---|
-| `index.html` | The whole site: onboarding, game and explore mode. Data is built in; D3 loads from a CDN. |
+| `index.html` | explore mode. 
 | `data_prep.py` | Rebuilds the data from NYC Open Data and prints a profile. |
-| `README.md` | This page. |
+
 
 ## AI use
 
