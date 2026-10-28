@@ -50,13 +50,6 @@ Beneath the daytime city runs a night city that rarely appears in its official p
 - Streets, lights & signals spike at 2 PM. This has not been checked yet and may come from how one agency files requests, not from the street.
 - The categories are broad. "Everything else" is still about 16% of all requests.
 
-**Next**
-- Add more specific clues (fireworks, helicopters, rodents) and filters for weekday vs. weekend and borough.
-- Look into the 2 PM street-request spike.
-- Test with classmates, note where people get stuck, and adjust the difficulty.
-- Add a text description of the dial for screen readers.
-- Submit to the NYC Open Data Project Gallery.
-
 ## Files
 
 | File | What it is |
